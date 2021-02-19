@@ -92,6 +92,7 @@ struct thread
     int nice;                           /* Niceness */
 
     /* For Priority Donation */
+    int starting_priority;              /* priority before donation */
     struct list donors_list;            /* List of threads donating priority */
     struct list_elem donors_elem;       /* Elements of donors_list*/
     struct lock *waiting_lock;          /* Lock being waited on*/
