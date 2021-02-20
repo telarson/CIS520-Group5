@@ -152,6 +152,9 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+/* For priority donation */
+void donation_get();
+void donation_release();
 
 
 #endif /* threads/thread.h */

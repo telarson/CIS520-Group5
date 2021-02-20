@@ -15,6 +15,8 @@
 #include "userprog/process.h"
 #endif
 
+static const int DEPTH = 8;   //Max donation depth
+
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
    of thread.h for details. */
@@ -620,6 +622,45 @@ static bool greater_thread_priority
   thread_a = list_entry (a, struct thread, elem);
   thread_b = list_entry (b, struct thread, elem);
   return thread_a->priority > thread_b->priority;
+}
+
+void
+donation_get()
+{
+  int depth = DEPTH;
+  struct thread* current = thread_current();
+
+  while(current->waiting_lock != NULL && depth > 0)
+  {
+      depth -= 1;
+      struct thread* prior = current->waiting_lock->holder;
+
+      if(prior != NULL && prior->priority < current->priority)
+      {
+        prior->priority = current->priority;
+        current = prior;
+      }
+      else
+        return;
+  }
+}
+
+void
+donation_release()
+{
+  struct thread* current = thread_current();
+  current->priority = current->starting_priority;
+
+  if(!list_empty(&current->donors_list))
+  {
+    struct thread* next = list_entry(list_begin(&current->donors_list), 
+    struct thread, donors_elem);
+
+    if(next->priority > current->priority)
+    {
+      current->priority = next->priority;
+    }
+  }
 }
 
 
