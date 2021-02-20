@@ -124,7 +124,7 @@ extern bool thread_mlfqs;
 void thread_init (void);
 void thread_start (void);
 
-void thread_tick (void);
+void thread_tick (int64_t current_ticks);
 void thread_print_stats (void);
 
 typedef void thread_func (void *aux);
@@ -153,8 +153,14 @@ int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
 /* For priority donation */
-void donation_get();
-void donation_release();
+void donation_get(void);
+void donation_release(void);
+void check_priority(void);
 
+bool greater_thread_priority
+  (const struct list_elem *, const struct list_elem *, void *aux);
+
+bool greater_donate_priority
+(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED);
 
 #endif /* threads/thread.h */

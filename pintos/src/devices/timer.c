@@ -195,7 +195,7 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  thread_tick ();
+  thread_tick (timer_ticks());
   /* Check if a thread needs to wake up*/
   struct thread* t;
   while(!list_empty(&threads_asleep)){
