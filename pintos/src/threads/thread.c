@@ -341,14 +341,41 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  enum intr_level old_level;
+  old_level = intr_disable();
+
+  struct thread* t = thread_current();
+  /* Set threads priorities to new_priority*/
+  t->priority = new_priority;
+  t->starting_priority = new_priority;
+
+  /* get priority and use it to compare to new_priority and either donate or yield*/
+  int max_priority = thread_get_priority();
+  if(t->priority < max_priority){
+      //donate
+  }
+  else {
+      //yield
+  }
+
+  intr_set_level (old_level);
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  return thread_current ()->priority;
+  /* Returns greatest priority in current thread*/
+  if(!list_empty(&thread_current()->donors_list)) {
+    struct thread* t = thread_current();
+    int max_priority = list_entry(list_front(&t->donors_list), struct thread, donors_elem)->priority;
+    if(t->priority <= max_priority) {
+      return max_priority;
+    }
+    else {
+      return t->priority;
+    }
+  }
 }
 
 /* Sets the current thread's nice value to NICE. */

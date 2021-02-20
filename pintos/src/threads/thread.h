@@ -91,6 +91,11 @@ struct thread
     struct list_elem allelem;           /* List element for all threads list. */
     int nice;                           /* Niceness */
 
+    /* For Timer*/
+    struct semaphore sema;
+    int64_t thread_wakeup_tick;
+    struct list_elem elem_timer;
+
     /* For Priority Donation */
     int starting_priority;              /* priority before donation */
     struct list donors_list;            /* List of threads donating priority */
