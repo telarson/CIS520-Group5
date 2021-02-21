@@ -197,7 +197,7 @@ static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
-  thread_tick (timer_ticks());
+  thread_tick ();
   /* Check if a thread needs to wake up*/
   struct thread* t;
   while(!list_empty(&threads_asleep)){ 
@@ -287,6 +287,6 @@ real_time_delay (int64_t num, int32_t denom)
    Checks if thread a has a longer sleep time than thread b, then returns
    true if a is shorter than b */
 bool
-thread_sleep_less(const struct list_elem *left, const struct list_elem *right, void *aux) {
+thread_sleep_less(const struct list_elem *left, const struct list_elem *right, void *aux UNUSED) {
   return list_entry(left,struct thread,elem_timer)->thread_wakeup_tick < list_entry(right,struct thread,elem_timer)->thread_wakeup_tick;
 }

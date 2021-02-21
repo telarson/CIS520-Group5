@@ -286,7 +286,7 @@ struct semaphore_elem
   };
 
 bool greater_sema
-(const struct list_elem *a, const struct list_elem *b, void *aux)
+(const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
   struct semaphore_elem *left = list_entry(a, struct  semaphore_elem, elem);
   struct semaphore_elem *right = list_entry(b, struct  semaphore_elem, elem);

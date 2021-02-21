@@ -26,9 +26,6 @@ static const int DEPTH = 8;   //Max donation depth
    that are ready to run but not actually running. */
 static struct list ready_list;
 
-/* List of processes in THREAD_BLOCK state, that is, processes
-   that are blocked. */
-static struct list block_list;
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -97,7 +94,6 @@ thread_init (void)
 
   lock_init (&tid_lock);
   list_init (&ready_list);
-  list_init (&block_list);
   list_init (&all_list);
 
   /* Set up a thread structure for the running thread. */
@@ -124,25 +120,11 @@ thread_start (void)
   sema_down (&idle_started);
 }
 
-void check_blocks(int64_t current_ticks){
-  struct list_elem *ele = list_begin(&block_list);
-
-  while (ele != list_end(&block_list))
-  {
-    struct thread *t = list_entry(ele, struct thread, elem);
-
-    if(current_ticks < t->thread_wakeup_tick) break;
-
-    list_remove(ele);
-    thread_unblock(t);
-    ele = list_begin(&block_list);
-  }
-}
 
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
-thread_tick (int64_t current_ticks) 
+thread_tick (void) 
 {
   struct thread *t = thread_current ();
 
@@ -159,8 +141,6 @@ thread_tick (int64_t current_ticks)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
-
-check_blocks(current_ticks);
   
 }
 
@@ -342,8 +322,10 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
+
   if (cur != idle_thread) 
     list_insert_ordered (&ready_list, &cur->elem, (list_less_func *) &greater_thread_priority, NULL);
+
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -530,7 +512,7 @@ is_thread (struct thread *t)
 static void
 init_thread (struct thread *t, const char *name, int priority)
 {
-  //enum intr_level old_level;
+  enum intr_level old_level;
 
   ASSERT (t != NULL);
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
@@ -547,10 +529,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->starting_priority = priority;
   t->waiting_lock = NULL;
   list_init(&t->donors_list);
+  sema_init(&t->sema,0);
 
-  //old_level = intr_disable ();
+  old_level = intr_disable ();
   
-  //intr_set_level (old_level);
+  intr_set_level (old_level);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -730,7 +713,14 @@ void check_priority()
 
 
     if (thread_current()->priority < next_thread->priority) {
-      thread_yield();
+      if(intr_context())
+      {
+        intr_yield_on_return();
+      }
+      else
+      {
+        thread_yield();
+      }
     }
       
   }
