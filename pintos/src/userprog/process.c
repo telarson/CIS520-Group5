@@ -21,6 +21,11 @@
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
+static void get_tid (struct thread *t, void *aux);
+
+static thread *match_thread;
+static tid_t current_tid;
+
 /* Starts a new thread running a user program loaded from
    FILENAME.  The new thread may be scheduled (and may even exit)
    before process_execute() returns.  Returns the new process's
@@ -38,10 +43,28 @@ process_execute (const char *file_name)
     return TID_ERROR;
   strlcpy (fn_copy, file_name, PGSIZE);
 
+  /* Using strtok_r we are able to split our filename where " " exists */
+  char *saveptr;
+  char *fn_name = strtok_r((char*)file_name, " ", &saveptr);
+
+  /* If our filename_name does not exist return -1 */
+  if(fn_name == NULL) {
+    return -1;
+  }
+
   /* Create a new thread to execute FILE_NAME. */
-  tid = thread_create (file_name, PRI_DEFAULT, start_process, fn_copy);
-  if (tid == TID_ERROR)
+  tid = thread_create (fn_name, PRI_DEFAULT, start_process, fn_copy);
+  if (tid == TID_ERROR) {
     palloc_free_page (fn_copy); 
+  }
+  /* if valid thread then find tid and set this child to parent thread*/
+  else{
+    current_tid = tid;
+    enum intr_level old_level = intr_disable();
+    thread_foreach(*get_tid, NULL);
+    list_push_front(&thread_current()->child_list, &match_thread->child_elem);
+    intr_set_level(old_level);
+  }
   return tid;
 }
 
@@ -437,7 +460,7 @@ setup_stack (void **esp)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success)
-        *esp = PHYS_BASE;
+        *esp = PHYS_BASE - 12;
       else
         palloc_free_page (kpage);
     }
@@ -462,4 +485,13 @@ install_page (void *upage, void *kpage, bool writable)
      address, then map our page there. */
   return (pagedir_get_page (t->pagedir, upage) == NULL
           && pagedir_set_page (t->pagedir, upage, kpage, writable));
+}
+
+/* passed in thread foreach to find matching tid*/
+static void
+get_tid(struct thread *t, void *aux UNUSED){
+  if(current_tid == t->tid)
+  {
+    match_thread = t;
+  }
 }
