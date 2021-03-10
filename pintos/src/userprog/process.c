@@ -23,7 +23,7 @@ static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 static void get_tid (struct thread *t, void *aux);
 
-static thread *match_thread;
+static struct thread *match_thread;
 static tid_t current_tid;
 
 /* Starts a new thread running a user program loaded from
