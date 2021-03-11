@@ -8,19 +8,6 @@ static void syscall_handler (struct intr_frame *);
 static int read_usr_stack (void *init_addr, void *result, size_t num_of_bytes);
 static int get_user (const uint8_t *uaddr);
 
-void halt (void);
-void exit (int status);
-void exec (void);
-void wait (void);
-void create (void);
-void remove (void);
-void open (void);
-void filesize (void);
-void read (void);
-void write (void);
-void seek (void);
-void tell (void);
-void close (void);
 
 /*Lock to ensure filesystem can only be accessed by one process at a time */
 struct lock lock_filesys;
@@ -186,10 +173,6 @@ void read (void)
   thread_exit ();
 }
 
-void write (void)
-{
-  thread_exit ();
-}
 
 void seek (void)
 {
