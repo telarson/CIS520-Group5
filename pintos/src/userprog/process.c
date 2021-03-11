@@ -22,6 +22,7 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 static void get_tid (struct thread *t, void *aux);
+static void get_args (char * fn, char* argv[], int *argc);
 
 static struct thread *match_thread;
 static tid_t current_tid;
@@ -218,7 +219,7 @@ struct Elf32_Phdr
 #define PF_W 2          /* Writable. */
 #define PF_R 4          /* Readable. */
 
-static bool setup_stack (void **esp);
+static bool setup_stack (void **esp, int argc, char *argv[]);
 static bool validate_segment (const struct Elf32_Phdr *, struct file *);
 static bool load_segment (struct file *file, off_t ofs, uint8_t *upage,
                           uint32_t read_bytes, uint32_t zero_bytes,
@@ -243,6 +244,11 @@ load (const char *file_name, void (**eip) (void), void **esp)
   if (t->pagedir == NULL) 
     goto done;
   process_activate ();
+
+  /* get args from file name*/
+  char *argv[25];
+  int argc;
+  get_args((char *)file_name, argv, &argc);
 
   /* Open executable file. */
   file = filesys_open (file_name);
@@ -325,7 +331,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
     }
 
   /* Set up stack. */
-  if (!setup_stack (esp))
+  if (!setup_stack (esp, argc, argv))
     goto done;
 
   /* Start address. */
@@ -448,9 +454,10 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 /* Create a minimal stack by mapping a zeroed page at the top of
-   user virtual memory. */
+   user virtual memory. Inspired by ChristianJHughes and pindexis
+   (note: both in desing2) */
 static bool
-setup_stack (void **esp) 
+setup_stack (void **esp, int argc, char *argv[]) 
 {
   uint8_t *kpage;
   bool success = false;
@@ -459,13 +466,37 @@ setup_stack (void **esp)
   if (kpage != NULL) 
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success)
-        *esp = PHYS_BASE - 12;
-      else
+      if (success){
+        *esp = PHYS_BASE - 24;
+        uint32_t * arg_pointer_array[argc]; //array of size argc containing pointer addresses.
+        int n = argc;
+        /* add each argument in descending order because stack grows down*/
+        while(--n >= 0){
+          //Allocate space for args including +1 byte for NULL
+          *esp = *esp - sizeof(char)*(strlen(argv[n])+1);
+          //Copy string to stack and pointer array
+          memcpy(*esp, argv[n], sizeof(char)*(strlen(argv[n])+1));
+          arg_pointer_array[n] = (uint32_t *)*esp;
+        }
+        *esp = *esp - 4;//open 32bits
+        (*(int *)(*esp)) = 0;//add sentinel
+        n = argc;
+        /* push arguments onto stack*/
+        while(--n >= 0){
+          *esp = *esp - 4;//open 32bits for each argument pushed
+          (*(uint32_t **)(*esp)) = arg_pointer_array[n];
+        }
+        *esp = *esp - 12;//allocate memory for next lines
+        (*(uintptr_t **)(*esp)) = (*esp+4); //pointer to pointer of the address of first argument
+        *(int *)(*esp) = argc; //#arguments onto stack
+        (*(int *)(*esp)) = 0; //ending return address
+        }
+      else{
         palloc_free_page (kpage);
+      }
     }
-  return success;
-}
+      return success;
+  }
 
 /* Adds a mapping from user virtual address UPAGE to kernel
    virtual address KPAGE to the page table.
@@ -493,5 +524,18 @@ get_tid(struct thread *t, void *aux UNUSED){
   if(current_tid == t->tid)
   {
     match_thread = t;
+  }
+}
+
+/* check cmd and return seperate args from input */
+static void
+get_args(char* fn, char* argv[], int *argc){
+  char *saveptr;
+  argv[0] = strtok_r(fn, " ", &saveptr);
+  char *token;
+  *argc = 1;
+  //populate argv with token arguments
+  while((token = strtok_r(NULL, " ", &saveptr))!=NULL){
+    argv[(*argc)++] = token;
   }
 }

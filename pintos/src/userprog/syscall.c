@@ -22,6 +22,9 @@ void seek (void);
 void tell (void);
 void close (void);
 
+/*Lock to ensure filesystem can only be accessed by one process at a time */
+struct lock lock_filesys;
+
 void
 syscall_init (void) 
 {
@@ -201,4 +204,22 @@ void tell (void)
 void close (void)
 {
   thread_exit ();
+}
+
+/* Writes SIZE bytes from BUFFER to the open file FD. Returns the number of bytes that were written*/
+int write (int fd, const void *buffer, unsigned size)
+{
+
+  lock_acquire(&lock_filesys);
+
+  if(fd == 1)
+  {
+    putbuf(buffer, size);
+    lock_release(&lock_filesys);
+    return size;
+  }
+
+  lock_release(&lock_filesys);
+
+  return 0;
 }
