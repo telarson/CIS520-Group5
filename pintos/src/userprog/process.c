@@ -455,7 +455,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 
 /* Create a minimal stack by mapping a zeroed page at the top of
    user virtual memory. Inspired by ChristianJHughes and pindexis
-   (note: both in desing2) */
+   (note: both in design2) */
 static bool
 setup_stack (void **esp, int argc, char *argv[]) 
 {

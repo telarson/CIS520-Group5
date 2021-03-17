@@ -5,14 +5,24 @@
 #include "threads/thread.h"
 #include "userprog/process.h"
 #include "filesys.h"
+#include "filesys/file.h"
+#include "devices/shutdown.h"
 
 static void syscall_handler (struct intr_frame *);
 static int read_usr_stack (void *init_addr, void *result, size_t num_of_bytes);
 static int get_user (const uint8_t *uaddr);
+struct file* get_file(int fd);
 
 
 /*Lock to ensure filesystem can only be accessed by one process at a time */
 struct lock lock_filesys;
+
+/* mapping of files for use of fd and list elem*/
+struct file_entry {
+  struct file *file;
+  int fd;
+  struct list_elem fe;
+};
 
 void
 syscall_init (void) 
@@ -83,7 +93,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_FILESIZE:
     {
-      filesize ();
+      int fd;
+    	read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
+      f->eax = filesize(fd);
       break;
     }
     case SYS_READ:
@@ -98,17 +110,25 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_SEEK:
     {
-      seek ();
+      int fd;
+    	read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
+    	int position;
+    	read_usr_stack(stack_pointer + 8, &position, sizeof(position));
+      seek (fd, position);
       break;
     }
     case SYS_TELL:
     {
-      tell ();
+      int fd;
+    	read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
+      f->eax = tell (fd);
       break;
     }
     case SYS_CLOSE:
     {
-      close ();
+      int fd;
+    	read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
+      close (fd);
       break;
     }
   }
@@ -140,7 +160,7 @@ get_user (const uint8_t *uaddr){
 
 void halt (void)
 {
-  thread_exit ();
+  shutdown_power_off(); //from devices/shutdown.h
 }
 
 void exit (int status)
@@ -183,9 +203,20 @@ void open (void)
   thread_exit ();
 }
 
-void filesize (void)
+/* get file and return its size (must lock while a file is being used) */
+int filesize (int fd)
 {
-  thread_exit ();
+  lock_acquire(&lock_filesys);
+  struct file *file = get_file(fd);
+
+  if(file == NULL) {
+  	lock_release(&lock_filesys);
+  	return -1;
+  }
+
+  int size  = file_length(file); //file_length used from filesys/file.h
+  lock_release(&lock_filesys);
+  return size;
 }
 
 void read (void)
@@ -193,20 +224,53 @@ void read (void)
   thread_exit ();
 }
 
-
-void seek (void)
+/* Changes the next byte to be read or written in open filefdtoposition,
+   expressed inbytes from the beginning of the file. Locks/gets file then calls
+   file_seek to do the work. */
+void seek (int fd, unsigned position)
 {
-  thread_exit ();
+  lock_acquire(&lock_filesys);
+  struct file *f = get_file(fd);
+
+  if(f == NULL){
+  	lock_release(&lock_filesys);
+  	return;
+  }
+  file_seek(f, position); // from filesys/file.h
+  lock_release(&lock_filesys);
 }
 
-void tell (void)
+/* Returns the position of the next byte to be read or written in open filefd,
+   expressed in bytes from the beginning of the file. */
+unsigned tell (int fd)
 {
-  thread_exit ();
+	lock_acquire(&lock_filesys);
+	struct file *f = get_file(fd);
+
+	if(f == NULL) {
+		lock_release(&lock_filesys);
+		return -1;
+	}
+	unsigned position = (unsigned) file_tell(f); // from filesys/file.h
+	lock_release(&lock_filesys);
+	return position;
 }
 
-void close (void)
+/* Closes file descriptor fd. Exiting or terminating a process implicitly closes all its openfile descriptors,
+    as if by calling this function for each one. */
+void close (int fd)
 {
-  thread_exit ();
+  lock_acquire(&lock_filesys);
+
+  if(list_empty(&thread_current()->fd_list)){
+  	return;
+  }
+
+  struct file *f = get_file(fd);
+  struct file_entry *file_entry = list_entry(list_front(&thread_current()->fd_list), struct file_entry, fe);
+  
+  file_close(f); // from filesys/file.h
+  list_remove(&file_entry->fe);
 }
 
 /* Writes SIZE bytes from BUFFER to the open file FD. Returns the number of bytes that were written*/
@@ -225,4 +289,17 @@ int write (int fd, const void *buffer, unsigned size)
   lock_release(&lock_filesys);
 
   return 0;
+}
+
+/* Gets file from the list of files based on descriptor */
+struct file* get_file(int fd) {
+	struct list_elem *e;
+
+	for(e = list_front(&thread_current()->fd_list); e != NULL; e = e->next) {
+		struct file_entry *file_entry = list_entry(e, struct file_entry, fe);
+		if(fd == file_entry->fd) {
+			return file_entry->file;
+		}
+	}
+	return NULL;
 }

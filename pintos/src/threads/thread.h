@@ -103,9 +103,11 @@ struct thread
     struct list_elem donors_elem;       /* Elements of donors_list*/
     struct lock *waiting_lock;          /* Lock being waited on*/
 
-
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
+
+    int fd;                             /* file decriptor unique to file of thread */
+    struct list fd_list;                /* list of decriptors */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -113,6 +115,8 @@ struct thread
     struct list child_list;             /* list of children */
     struct list_elem child_elem;        /* list element for children */
     int exit_code;                      /* status on return from interupt */
+    
+
 #endif
 
     /* Owned by thread.c. */

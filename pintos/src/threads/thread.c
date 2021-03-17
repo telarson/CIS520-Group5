@@ -528,6 +528,12 @@ init_thread (struct thread *t, const char *name, int priority)
 
   t->starting_priority = priority;
   t->waiting_lock = NULL;
+  list_init(&t->fd_list);
+  t->fd = 2;
+  #ifdef USERPROG
+  list_init(&t->child_list)
+  t->exit_code = -1;
+  #endif
   list_init(&t->donors_list);
   sema_init(&t->sema,0);
 
