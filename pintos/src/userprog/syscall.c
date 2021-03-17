@@ -3,6 +3,8 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
+#include "userprog/process.h"
+#include "filesys.h"
 
 static void syscall_handler (struct intr_frame *);
 static int read_usr_stack (void *init_addr, void *result, size_t num_of_bytes);
@@ -40,14 +42,17 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_EXIT:
     {
       int exit_code;
-      read_usr_stack (stack_pointer + 4, &exit_code, 4);
+      read_usr_stack (stack_pointer + 4, &exit_code, sizeof(exit_code));
       exit (exit_code);
       NOT_REACHED ();
       break;
     }
     case SYS_EXEC:
     {
-      exec ();
+      void* cmd_line;
+      read_usr_stack (stack_pointer + 4, &cmd_line, sizeof(cmd_line));
+      int id = exec ((const char*) cmd_line);
+      f->eax = (uint32_t) id;
       break;
     }
     case SYS_WAIT:
@@ -57,7 +62,13 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_CREATE:
     {
-      create ();
+      const char *file;
+      unsigned initial_size;
+      bool result;
+      read_usr_stack(stack_pointer + 4, &file, sizeof(file));
+      read_usr_stack(stack_pointer + 8, &initial_size, sizeof(initial_size));
+      result = create (file, initial_size);
+      f->eax = result;
       break;
     }
     case SYS_REMOVE:
@@ -138,9 +149,13 @@ void exit (int status)
   thread_exit ();
 }
 
-void exec (void)
+pid_t
+exec (const char *cmd_line)
 {
-  thread_exit ();
+  lock_acquire (&lock_filesys);
+  pid_t id = process_execute (cmd_line);
+  lock_release (&lock_filesys);
+  return id;
 }
 
 void wait (void)
@@ -148,9 +163,14 @@ void wait (void)
   thread_exit ();
 }
 
-void create (void)
+bool
+create (const char *file, unsigned initial_size)
 {
-  thread_exit ();
+  bool result;
+  lock_acquire (&lock_filesys);
+  result = filesys_create (file, initial_size);
+  lock_release (&lock_filesys);
+  return result;
 }
 
 void remove (void)
