@@ -12,6 +12,7 @@
 #include "userprog/process.h"
 #include "devices/input.h"
 #include "threads/malloc.h"
+#include "threads/palloc.h"
 
 
 static void syscall_handler (struct intr_frame *);
@@ -89,12 +90,20 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_REMOVE:
     {
-      remove ();
+      const char *file;
+      bool result;
+      read_usr_stack (stack_pointer + 4, &file, sizeof(file));
+      result = remove (file);
+      f->eax = result;
       break;
     }
     case SYS_OPEN:
     {
-      open ();
+      const char *file;
+      int result;
+      read_usr_stack (stack_pointer + 4, &file, sizeof(file));
+      result = open (file);
+      f->eax = result;
       break;
     }
     case SYS_FILESIZE:
@@ -199,14 +208,49 @@ create (const char *file, unsigned initial_size)
   return result;
 }
 
-void remove (void)
+bool
+remove (const char *file)
 {
-  thread_exit ();
+  bool result;
+  lock_acquire (&lock_filesys);
+  result = filesys_remove (file);
+  lock_release (&lock_filesys);
+  return result;
 }
 
-void open (void)
+int
+open (const char *file)
 {
-  thread_exit ();
+  int result;
+  struct file *file_to_open;
+  struct file_entry *entry;
+  entry->fd = palloc_get_page (0);
+  if (!entry->fd)
+  {
+    return -1;
+  }
+
+  lock_acquire (&lock_filesys);
+  file_to_open = filesys_open (file);
+  if (!file_to_open)
+  {
+    palloc_free_page (entry->fd);
+    lock_release (&lock_filesys);
+    return -1;
+  }
+
+  file_entry->file = file_to_open;
+  struct list *fd_list = &thread_current ()->fd_list;
+  if (list_empty(fd_list))
+  {
+    file_entry->fd = 3;
+  } else
+  {
+    file_entry->fd = (list_entry(list_back(fd_list), struct file_entry, fe)->fd) + 1;
+  }
+  list_push_back (fd_list, &(file_entry->fe));
+  lock_release (&lock_filesys);
+  return file_entry->fd;
 }
 
 /* get file and return its size (must lock while a file is being used) */
