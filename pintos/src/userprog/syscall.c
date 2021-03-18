@@ -3,10 +3,16 @@
 #include <syscall-nr.h>
 #include "threads/interrupt.h"
 #include "threads/thread.h"
-#include "userprog/process.h"
-#include "filesys.h"
+#include "threads/vaddr.h"
+#include "userprog/pagedir.h"
+#include "threads/init.h"
+#include "devices/shutdown.h" /* Imports shutdown_power_off() for use in halt(). */
 #include "filesys/file.h"
-#include "devices/shutdown.h"
+#include "filesys/filesys.h"
+#include "userprog/process.h"
+#include "devices/input.h"
+#include "threads/malloc.h"
+
 
 static void syscall_handler (struct intr_frame *);
 static int read_usr_stack (void *init_addr, void *result, size_t num_of_bytes);
@@ -219,9 +225,40 @@ int filesize (int fd)
   return size;
 }
 
-void read (void)
+/*Read "size" bytes from fd,
+  return number of bytes read/ -1 if reading does not occur/ 0 if at end of file*/
+int read (int fd, void *buffer, unsigned size)
 {
-  thread_exit ();
+  lock_acquire(&lock_filesys);
+
+  if(fd == 0)
+  {
+    lock_release(&lock_filesys);
+    return (int) input_getc();
+  }
+
+  if(fd == 1 || list_empty(&thread_current()->fd))
+  {
+    lock_release(&lock_filesys);
+    return 0;
+  }
+  
+  struct list_elem *temp;
+
+  for (temp = list_front(&thread_current()->fd); temp != NULL; temp = temp->next)
+    {
+        struct file_entry *t = list_entry (temp, struct file_entry, fe);
+        if (t->fd == fd)
+        {
+          lock_release(&lock_filesys);
+          int bytes = (int) file_read(t->file, buffer, size);
+          return bytes;
+        }
+    }
+
+
+  lock_release(&lock_filesys);
+  return -1;
 }
 
 /* Changes the next byte to be read or written in open filefdtoposition,
@@ -279,11 +316,34 @@ int write (int fd, const void *buffer, unsigned size)
 
   lock_acquire(&lock_filesys);
 
+  //fd == 0, no files present or STDIN
+  if (fd == 0 || list_empty(&thread_current()->fd))
+  {
+    lock_release(&lock_filesys);
+    return 0;
+  }
+  
+  //fd == 1, write to STDOUT
   if(fd == 1)
   {
     putbuf(buffer, size);
     lock_release(&lock_filesys);
     return size;
+  }
+  
+  struct list_elem *temp;
+
+  //Check if fd is owened by current process
+  for (temp = list_front(&thread_current()->fd); temp != NULL; temp = temp->next)
+  {
+      struct file_entry *t = list_entry (temp, struct file_entry, fe);
+
+      if (t->fd == fd)
+      {
+        int bytes_written = (int) file_write(t->file, buffer, size);
+        lock_release(&lock_filesys);
+        return bytes_written;
+      }
   }
 
   lock_release(&lock_filesys);
