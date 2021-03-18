@@ -74,7 +74,10 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_WAIT:
     {
-      wait ();
+      int wait_pid;
+      read_usr_stack(stack_pointer +4, wait_pid, sizeof(wait_pid));
+
+      f->eax = wait((pid_t) wait_pid);
       break;
     }
     case SYS_CREATE:
@@ -193,9 +196,9 @@ exec (const char *cmd_line)
   return id;
 }
 
-void wait (void)
+int wait (pid_t pid)
 {
-  thread_exit ();
+  return process_wait(pid);
 }
 
 bool
