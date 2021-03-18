@@ -360,8 +360,15 @@ load (const char *file_name, void (**eip) (void), void **esp)
   success = true;
 
  done:
+
+  /* If load is successful do not allow it to be written to. Otherwise close the file. */
+  if(success) {
+    file_deny_write(file);
+  }
+  else {
+    file_close(file);
+  }
   /* We arrive here whether the load is successful or not. */
-  file_close (file);
   return success;
 }
 
