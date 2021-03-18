@@ -112,7 +112,27 @@ start_process (void *file_name_)
 int
 process_wait (tid_t child_tid UNUSED) 
 {
-  return -1;
+  struct thread *waiting_thread = NULL;
+
+  struct list_elem *temp;
+
+  if(list_empty(&thread_current()->child_list))
+  {
+    return -1;
+  }
+
+  for (temp = list_front(&thread_current()->child_list); temp != NULL; temp = temp->next)
+  {
+      struct thread *n = list_entry (temp, struct thread, child_elem);
+      
+      if (n->tid == child_tid)
+      {
+        waiting_thread = n;
+        break;
+      }
+  }
+
+  return waiting_thread->exit_code;
 }
 
 /* Free the current process's resources. */

@@ -184,9 +184,9 @@ exec (const char *cmd_line)
   return id;
 }
 
-void wait (void)
+int wait (pid_t pid)
 {
-  thread_exit ();
+  return process_wait(pid);
 }
 
 bool
