@@ -118,12 +118,28 @@ syscall_handler (struct intr_frame *f UNUSED)
     }
     case SYS_READ:
     {
-      read ();
+      int fd;
+      void * buff;
+      unsigned int size;
+
+      read_usr_stack(stack_pointer +4, &fd, sizeof(fd));
+      read_usr_stack(stack_pointer +8, &buff, sizeof(buff));
+      read_usr_stack(stack_pointer + 12, &size, sizeof(size));
+
+      f->eax = read(fd, buff, size);
       break;
     }
     case SYS_WRITE:
     {
-      write ();
+      int fd;
+      void * buff;
+      unsigned int size;
+
+      read_usr_stack(stack_pointer +4, &fd, sizeof(fd));
+      read_usr_stack(stack_pointer +8, &buff, sizeof(buff));
+      read_usr_stack(stack_pointer + 12, &size, sizeof(size));
+
+      f->eax = write(fd, buff, size);
       break;
     }
     case SYS_SEEK:
