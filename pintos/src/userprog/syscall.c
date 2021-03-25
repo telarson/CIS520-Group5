@@ -41,14 +41,14 @@ syscall_init (void)
   dispatches to the appropriate handler based on constants defined
   in syscall-nr.h*/
 static void
-syscall_handler (struct intr_frame *f UNUSED) 
+syscall_handler (struct intr_frame *f) 
 {
+  printf ("system call!\n");
   void *stack_pointer = f->esp;
   int syscall_num;
 
   read_usr_stack (stack_pointer, &syscall_num, 4);
-  printf ("system call!\n");
-
+  
   switch (syscall_num)
   {
     case SYS_HALT:
@@ -75,7 +75,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     case SYS_WAIT:
     {
       int wait_pid;
-      read_usr_stack(stack_pointer +4, wait_pid, sizeof(wait_pid));
+      read_usr_stack(stack_pointer + 4, wait_pid, sizeof(wait_pid));
 
       f->eax = wait((pid_t) wait_pid);
       break;
