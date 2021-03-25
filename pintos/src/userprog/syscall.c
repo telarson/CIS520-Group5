@@ -32,8 +32,9 @@ struct file_entry {
 };
 
 void
-syscall_init (void) 
+syscall_init (void)
 {
+  printf("system init\n");
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -41,7 +42,7 @@ syscall_init (void)
   dispatches to the appropriate handler based on constants defined
   in syscall-nr.h*/
 static void
-syscall_handler (struct intr_frame *f) 
+syscall_handler (struct intr_frame *f)
 {
   printf ("system call!\n");
   void *stack_pointer = f->esp;
@@ -74,10 +75,11 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_WAIT:
     {
-      int wait_pid;
-      read_usr_stack(stack_pointer + 4, wait_pid, sizeof(wait_pid));
+      pid_t wait_pid;
+      read_usr_stack(stack_pointer + 4, &wait_pid, sizeof(wait_pid));
 
-      f->eax = wait((pid_t) wait_pid);
+      int result = wait(wait_pid);
+      f->eax = (uint32_t) result;
       break;
     }
     case SYS_CREATE:
@@ -243,7 +245,7 @@ int
 open (const char *file)
 {
   int result;
-  struct file *file_to_open;
+  struct file *open_file;
   struct file_entry *entry;
   entry->fd = palloc_get_page (0);
   if (!entry->fd)
@@ -252,15 +254,15 @@ open (const char *file)
   }
 
   lock_acquire (&lock_filesys);
-  file_to_open = filesys_open (file);
-  if (!file_to_open)
+  open_file = filesys_open (file);
+  if (!open_file)
   {
     palloc_free_page (entry->fd);
     lock_release (&lock_filesys);
     return -1;
   }
 
-  entry->file = file_to_open;
+  entry->file = open_file;
   struct list *fd_list = &thread_current ()->fd_list;
   if (list_empty(fd_list))
   {
