@@ -200,6 +200,7 @@ void halt (void)
 
 void exit (int status)
 {
+  printf("%s: exit(%d)\n", thread_current()->name, status);
   thread_current ()->exit_code = status;
   thread_exit ();
 }
