@@ -531,7 +531,7 @@ init_thread (struct thread *t, const char *name, int priority)
   list_init(&t->fd_list);
   t->fd = 2;
   #ifdef USERPROG
-  list_init(&t->child_list)
+  list_init(&t->child_list);
   t->exit_code = -1;
   #endif
   list_init(&t->donors_list);

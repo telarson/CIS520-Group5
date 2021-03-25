@@ -156,7 +156,8 @@ static int
 read_usr_stack (void *init_addr, void *result, size_t num_of_bytes)
 {
   int32_t value;
-  for (size_t i = 0; i < num_of_bytes; i++)
+  size_t i;
+  for (i = 0; i < num_of_bytes; i++)
   {
     value = get_user (init_addr + i);
     *(char*)(result + i) = value & 0xff;
@@ -242,18 +243,18 @@ open (const char *file)
     return -1;
   }
 
-  file_entry->file = file_to_open;
+  entry->file = file_to_open;
   struct list *fd_list = &thread_current ()->fd_list;
   if (list_empty(fd_list))
   {
-    file_entry->fd = 3;
+    entry->fd = 3;
   } else
   {
-    file_entry->fd = (list_entry(list_back(fd_list), struct file_entry, fe)->fd) + 1;
+    entry->fd = (list_entry(list_back(fd_list), struct file_entry, fe)->fd) + 1;
   }
-  list_push_back (fd_list, &(file_entry->fe));
+  list_push_back (fd_list, &(entry->fe));
   lock_release (&lock_filesys);
-  return file_entry->fd;
+  return entry->fd;
 }
 
 /* get file and return its size (must lock while a file is being used) */
