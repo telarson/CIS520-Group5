@@ -132,6 +132,13 @@ process_wait (tid_t child_tid UNUSED)
       }
   }
 
+  if(waiting_thread == NULL)
+  {
+    return -1;
+  }
+
+  list_remove(&waiting_thread->child_elem);
+
   return waiting_thread->exit_code;
 }
 
