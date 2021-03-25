@@ -138,7 +138,6 @@ process_wait (tid_t child_tid UNUSED)
   }
 
   list_remove(&waiting_thread->child_elem);
-  sema_down(&waiting_thread->being_waited_on);
 
   return waiting_thread->exit_code;
 }
