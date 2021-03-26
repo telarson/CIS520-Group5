@@ -304,7 +304,7 @@ int read (int fd, void *buffer, unsigned size)
     return (int) input_getc();
   }
 
-  if(fd == 1 || list_empty((struct list *)&thread_current()->fd))
+  if(fd == 1 || list_empty((struct list *)&thread_current()->fd_list))
   {
     lock_release(&lock_filesys);
     return 0;
@@ -312,7 +312,7 @@ int read (int fd, void *buffer, unsigned size)
   
   struct list_elem *temp;
 
-  for (temp = list_front((struct list *)&thread_current()->fd); temp != NULL; temp = temp->next)
+  for (temp = list_front((struct list *)&thread_current()->fd_list); temp != NULL; temp = temp->next)
     {
         struct file_entry *t = list_entry (temp, struct file_entry, fe);
         if (t->fd == fd)
@@ -384,7 +384,7 @@ int write (int fd, const void *buffer, unsigned size)
   lock_acquire(&lock_filesys);
 
   //fd == 0, no files present or STDIN
-  if (fd == 0 || list_empty((struct list *)&thread_current()->fd))
+  if (fd == 0 || list_empty((struct list *)&thread_current()->fd_list))
   {
     lock_release(&lock_filesys);
     return 0;
@@ -401,7 +401,7 @@ int write (int fd, const void *buffer, unsigned size)
   struct list_elem *temp;
 
   //Check if fd is owened by current process
-  for (temp = list_front((struct list *)&thread_current()->fd); temp != NULL; temp = temp->next)
+  for (temp = list_front((struct list *)&thread_current()->fd_list); temp != NULL; temp = temp->next)
   {
       struct file_entry *t = list_entry (temp, struct file_entry, fe);
 
