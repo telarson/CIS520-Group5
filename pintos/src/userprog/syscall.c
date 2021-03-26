@@ -104,6 +104,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_OPEN:
     {
+      printf ("open!\n");
       const char *file;
       int result;
       read_usr_stack (stack_pointer + 4, &file, sizeof(file));
@@ -244,11 +245,9 @@ remove (const char *file)
 int
 open (const char *file)
 {
-  int result;
   struct file *open_file;
-  struct file_entry *entry;
-  entry->fd = palloc_get_page (0);
-  if (!entry->fd)
+  struct file_entry *entry = palloc_get_page (0);
+  if (!entry)
   {
     return -1;
   }
@@ -257,7 +256,7 @@ open (const char *file)
   open_file = filesys_open (file);
   if (!open_file)
   {
-    palloc_free_page ((void *)entry->fd);
+    palloc_free_page (entry);
     lock_release (&lock_filesys);
     return -1;
   }
