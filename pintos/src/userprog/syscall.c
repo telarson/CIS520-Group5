@@ -34,6 +34,7 @@ struct file_entry {
 void
 syscall_init (void)
 {
+  lock_init(&lock_filesys);
   printf("system init\n");
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
