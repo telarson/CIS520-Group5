@@ -35,7 +35,6 @@ void
 syscall_init (void)
 {
   lock_init(&lock_filesys);
-  printf("system init\n");
   intr_register_int (0x30, 3, INTR_ON, syscall_handler, "syscall");
 }
 
@@ -45,21 +44,24 @@ syscall_init (void)
 static void
 syscall_handler (struct intr_frame *f)
 {
-  printf ("system call!\n");
   void *stack_pointer = f->esp;
   int syscall_num;
 
+  printf ("system call!\n");
   read_usr_stack (stack_pointer, &syscall_num, 4);
+  printf ("Entering switch!\n");
   
   switch (syscall_num)
   {
     case SYS_HALT:
     {
+      printf ("halt!\n");
       halt ();
       break;
     }
     case SYS_EXIT:
     {
+      printf ("exit!\n");
       int exit_code;
       read_usr_stack (stack_pointer + 4, &exit_code, sizeof(exit_code));
       exit (exit_code);
@@ -68,6 +70,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_EXEC:
     {
+      printf ("exec!\n");
       void* cmd_line;
       read_usr_stack (stack_pointer + 4, &cmd_line, sizeof(cmd_line));
       int id = exec ((const char*) cmd_line);
@@ -76,6 +79,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_WAIT:
     {
+      printf ("wait!\n");
       pid_t wait_pid;
       read_usr_stack(stack_pointer + 4, &wait_pid, sizeof(wait_pid));
 
@@ -85,6 +89,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_CREATE:
     {
+      printf ("create!\n");
       const char *file;
       unsigned initial_size;
       bool result;
@@ -96,6 +101,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_REMOVE:
     {
+      printf ("remove!\n");
       const char *file;
       bool result;
       read_usr_stack (stack_pointer + 4, &file, sizeof(file));
@@ -115,6 +121,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_FILESIZE:
     {
+      printf ("filesize!\n");
       int fd;
     	read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
       f->eax = filesize(fd);
@@ -122,6 +129,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_READ:
     {
+      printf ("read!\n");
       int fd;
       void * buff;
       unsigned int size;
@@ -135,19 +143,24 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_WRITE:
     {
+      printf ("write!\n");
       int fd;
-      void * buff;
-      unsigned int size;
+      const void * buff;
+      unsigned size;
 
-      read_usr_stack(stack_pointer +4, &fd, sizeof(fd));
-      read_usr_stack(stack_pointer +8, &buff, sizeof(buff));
+      printf ("reading user stack...\n");
+      read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
+      read_usr_stack(stack_pointer + 8, &buff, sizeof(buff));
       read_usr_stack(stack_pointer + 12, &size, sizeof(size));
 
+      printf ("calling write function!\n");
       f->eax = write(fd, buff, size);
+      printf("success!\n");
       break;
     }
     case SYS_SEEK:
     {
+      printf ("seek!\n");
       int fd;
     	read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
     	int position;
@@ -157,6 +170,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_TELL:
     {
+      printf ("tell!\n");
       int fd;
     	read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
       f->eax = tell (fd);
@@ -164,6 +178,7 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_CLOSE:
     {
+      printf ("close!\n");
       int fd;
     	read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
       close (fd);
@@ -380,28 +395,38 @@ void close (int fd)
 /* Writes SIZE bytes from BUFFER to the open file FD. Returns the number of bytes that were written*/
 int write (int fd, const void *buffer, unsigned size)
 {
-
+  printf("Acquiring lock!\n");
   lock_acquire(&lock_filesys);
 
   //fd == 0, no files present or STDIN
+  printf("evaluating if\n");
   if (fd == 0 || list_empty((struct list *)&thread_current()->fd))
   {
+    printf("inside if!\n");
     lock_release(&lock_filesys);
     return 0;
   }
   
+    printf("evaluating another if!\n");
+
   //fd == 1, write to STDOUT
   if(fd == 1)
   {
+    printf("inside another if!\n");
     putbuf(buffer, size);
+    printf("releasing lock!\n");
     lock_release(&lock_filesys);
+
+    printf("returning!\n");
     return size;
   }
   
   struct list_elem *temp;
 
+
+  printf("entering for!\n");
   //Check if fd is owened by current process
-  for (temp = list_front((struct list *)&thread_current()->fd); temp != NULL; temp = temp->next)
+  for (temp = list_front((struct list *)&thread_current()->fd_list); temp != NULL; temp = temp->next)
   {
       struct file_entry *t = list_entry (temp, struct file_entry, fe);
 
@@ -413,6 +438,7 @@ int write (int fd, const void *buffer, unsigned size)
       }
   }
 
+  printf("releasing lock\n");
   lock_release(&lock_filesys);
 
   return 0;
