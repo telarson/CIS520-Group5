@@ -501,7 +501,7 @@ setup_stack (void **esp, int argc, char *argv[])
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success){
-        *esp = PHYS_BASE - 24;
+        *esp = PHYS_BASE;
         uint32_t * arg_pointer_array[argc]; //array of size argc containing pointer addresses.
         int n = argc;
         /* add each argument in descending order because stack grows down*/
