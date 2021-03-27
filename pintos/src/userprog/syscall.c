@@ -328,7 +328,17 @@ int read (int fd, void *buffer, unsigned size)
 
   if(fd == 0)
   {
+    //Inspired by Ramirez and To
+    unsigned i = 0;
+    uint8_t *local_buf = (uint8_t *) buffer;
+    for (;i < size; i++)
+    {
+      local_buf[i] = input_getc();
+    }
+    return size;
+
     lock_release(&lock_filesys);
+
     return (int) input_getc();
   }
 
