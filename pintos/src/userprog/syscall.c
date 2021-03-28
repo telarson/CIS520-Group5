@@ -476,7 +476,7 @@ struct file* get_file(int fd) {
 void
 validate_ptr (const void *vaddr)
 {
-    if (vaddr < 0x08048000 || !is_user_vaddr(vaddr))
+    if (vaddr > PHYS_BASE || !is_user_vaddr(vaddr))
     {
       // virtual memory address is not reserved for us (out of bound)
       exit(-1);

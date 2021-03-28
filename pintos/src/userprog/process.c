@@ -521,8 +521,8 @@ setup_stack (void **esp, int argc, char *argv[])
           (*(uint32_t **)(*esp)) = arg_pointer_array[n];
         }
         *esp = *esp - 12;//allocate memory for next lines
-        (*(uintptr_t **)(*esp)) = (*esp+4); //pointer to pointer of the address of first argument
-        *(int *)(*esp) = argc; //#arguments onto stack
+        (*(uintptr_t **)(*esp+8)) = (*esp+4); //pointer to pointer of the address of first argument
+        *(int *)(*esp+4) = argc; //#arguments onto stack
         (*(int *)(*esp)) = 0; //ending return address
         }
       else{
