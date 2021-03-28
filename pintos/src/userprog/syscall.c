@@ -335,11 +335,8 @@ int read (int fd, void *buffer, unsigned size)
     {
       local_buf[i] = input_getc();
     }
-    return size;
-
     lock_release(&lock_filesys);
-
-    return (int) input_getc();
+    return size;
   }
 
   if(fd == 1 || list_empty((struct list *)&thread_current()->fd_list))
