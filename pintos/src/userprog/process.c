@@ -509,7 +509,7 @@ setup_stack (void **esp, int argc, char *argv[])
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success) {
-        *esp = PHYS_BASE-24;
+        *esp = PHYS_BASE;
         int i = argc;
 	uint32_t * arr[argc];
 	for(i = argc-1; i >= 0; i--)
