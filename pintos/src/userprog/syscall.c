@@ -150,9 +150,9 @@ syscall_handler (struct intr_frame *f)
       unsigned size;
 
       printf ("reading user stack...\n");
-      read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
-      read_usr_stack(stack_pointer + 8, &buff, sizeof(buff));
-      read_usr_stack(stack_pointer + 12, &size, sizeof(size));
+      read_usr_stack(stack_pointer +4, &fd, sizeof(fd));
+      read_usr_stack(stack_pointer +8 , &buff, sizeof(buff));
+      read_usr_stack(stack_pointer +12 , &size, sizeof(size));
 
       printf ("calling write function!\n");
       f->eax = write(fd, buff, size);

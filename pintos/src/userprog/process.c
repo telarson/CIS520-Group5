@@ -530,7 +530,7 @@ setup_stack (void **esp, int argc, char *argv[])
       }
     }
       return success;
-  }
+}
 
 /* Adds a mapping from user virtual address UPAGE to kernel
    virtual address KPAGE to the page table.
