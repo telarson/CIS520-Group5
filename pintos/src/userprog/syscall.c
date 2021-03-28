@@ -420,7 +420,7 @@ int write (int fd, const void *buffer, unsigned size)
 
   //fd == 0, no files present or STDIN
   printf("evaluating if\n");
-  if (fd == 0 || list_empty((struct list *)&thread_current()->fd_list))
+  if (fd == 0)
   {
     printf("inside if!\n");
     lock_release(&lock_filesys);
@@ -441,27 +441,19 @@ int write (int fd, const void *buffer, unsigned size)
     return size;
   }
   
-  struct list_elem *temp;
-
-
-  printf("entering for!\n");
-  //Check if fd is owened by current process
-  for (temp = list_front(&thread_current()->fd_list); temp != NULL; temp = temp->next)
+  printf("Writing to file!\n");
+  struct file *file_ptr = get_file(fd);
+  if(!file_ptr)
   {
-      struct file_entry *t = list_entry (temp, struct file_entry, fe);
-
-      if (t->fd == fd)
-      {
-        int bytes_written = (int) file_write(t->file, buffer, size);
-        lock_release(&lock_filesys);
-        return bytes_written;
-      }
-  }
+    lock_release(&lock_filesys);
+    return -1;
+  }  
+  int bytes_written = (int)file_write(file_ptr, buffer, size);
 
   printf("releasing lock\n");
   lock_release(&lock_filesys);
 
-  return 0;
+  return bytes_written;
 }
 
 /* Gets file from the list of files based on descriptor */
