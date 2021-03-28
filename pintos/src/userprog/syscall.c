@@ -47,6 +47,7 @@ syscall_handler (struct intr_frame *f)
 {
   void *stack_pointer = f->esp;
   int syscall_num;
+  int arg[3];
 
   printf ("system call!\n");
   read_usr_stack (stack_pointer, &syscall_num, 4);
@@ -145,17 +146,13 @@ syscall_handler (struct intr_frame *f)
     case SYS_WRITE:
     {
       printf ("write!\n");
-      int fd;
-      const void * buff;
-      unsigned size;
-
       printf ("reading user stack...\n");
-      read_usr_stack(stack_pointer +4, &fd, sizeof(fd));
-      read_usr_stack(stack_pointer +8 , &buff, sizeof(buff));
-      read_usr_stack(stack_pointer +12 , &size, sizeof(size));
+      get_args(f, &arg[0], 3);
 
+      arg[1] = getpage_ptr((const void *)arg[1]);
+      
       printf ("calling write function!\n");
-      f->eax = write(fd, buff, size);
+      f->eax = write(arg[0], (const void *) arg[1], (unsigned) arg[2]);
       printf("success!\n");
       break;
     }
@@ -467,4 +464,16 @@ struct file* get_file(int fd) {
 		}
 	}
 	return NULL;
+}
+
+/*get pointer to a page */
+int
+getpage_ptr(const void *vaddr)
+{
+  void *ptr = pagedir_get_page(thread_current()->pagedir, vaddr);
+  if (!ptr)
+  {
+    syscall_exit(-1);
+  }
+  return (int)ptr;
 }
