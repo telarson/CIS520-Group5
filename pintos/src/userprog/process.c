@@ -526,7 +526,7 @@ setup_stack (void **esp, int argc, char *argv[])
           *esp = *esp - 4;//32bits each allocated
           (*(uint32_t **)(*esp)) = arr[i];
         }
-        *esp = *esp - 4
+        *esp = *esp - 4;
         (*(uintptr_t  **)(*esp)) = (*esp+4);
         *esp = *esp - 4;
         *(int *)(*esp) = argc;
