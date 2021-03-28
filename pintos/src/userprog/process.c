@@ -273,9 +273,16 @@ load (const char *file_name, void (**eip) (void), void **esp)
   process_activate ();
 
   /* get args from file name*/
-  char *argv[25];
-  int argc;
-  get_args((char *)file_name, argv, &argc);
+  char *argv[50];
+  int argc = 0;
+
+  char *token, *saveptr;
+  for(token = strtok_r((char *)file_name, " ", &saveptr); token != NULL; token = strtok_r(NULL, " ", &saveptr)){
+    argv[argc] = token;
+    argc++;
+  }
+
+  //get_args((char *)file_name, argv, &argc);
 
   /* Open executable file. */
   file = filesys_open (file_name);
@@ -371,6 +378,7 @@ load (const char *file_name, void (**eip) (void), void **esp)
   /* If load is successful do not allow it to be written to. Otherwise close the file. */
   if(success) {
     file_deny_write(file);
+    t->file = file;
   }
   else {
     file_close(file);
@@ -488,7 +496,7 @@ load_segment (struct file *file, off_t ofs, uint8_t *upage,
 }
 
 /* Create a minimal stack by mapping a zeroed page at the top of
-   user virtual memory. Inspired by ChristianJHughes and pindexis
+   user virtual memory. Inspired by ChristianJHuges and pindexis
    (note: both in design2) */
 static bool
 setup_stack (void **esp, int argc, char *argv[]) 
@@ -497,39 +505,38 @@ setup_stack (void **esp, int argc, char *argv[])
   bool success = false;
 
   kpage = palloc_get_page (PAL_USER | PAL_ZERO);
-  if (kpage != NULL) 
+  if (kpage != NULL)
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
-      if (success){
+      if (success) {
         *esp = PHYS_BASE;
-        uint32_t * arg_pointer_array[argc]; //array of size argc containing pointer addresses.
-        int n = argc;
-        /* add each argument in descending order because stack grows down*/
-        while(--n >= 0){
-          //Allocate space for args including +1 byte for NULL
-          *esp = *esp - sizeof(char)*(strlen(argv[n])+1);
-          //Copy string to stack and pointer array
-          memcpy(*esp, argv[n], sizeof(char)*(strlen(argv[n])+1));
-          arg_pointer_array[n] = (uint32_t *)*esp;
+        int i = argc;
+        uint32_t * arr[argc];
+        for(i = argc; i >= 0; i--)
+        {
+          *esp = *esp - (strlen(argv[i])+1)*sizeof(char);
+          arr[i] = (uint32_t *)*esp;
+          memcpy(*esp,argv[i],strlen(argv[i])+1);
         }
-        *esp = *esp - 4;//open 32bits
-        (*(int *)(*esp)) = 0;//add sentinel
-        n = argc;
-        /* push arguments onto stack*/
-        while(--n >= 0){
-          *esp = *esp - 4;//open 32bits for each argument pushed
-          (*(uint32_t **)(*esp)) = arg_pointer_array[n];
+        *esp = *esp - 4;
+        (*(int *)(*esp)) = 0;
+        i = argc;
+        for(i = argc; i >= 0; i--)
+        {
+          *esp = *esp - 4;//32bits each allocated
+          (*(uint32_t **)(*esp)) = arr[i];
         }
-        *esp = *esp - 12;//allocate memory for next lines
-        (*(uintptr_t **)(*esp+8)) = (*esp+4); //pointer to pointer of the address of first argument
-        *(int *)(*esp+4) = argc; //#arguments onto stack
-        (*(int *)(*esp)) = 0; //ending return address
-        }
-      else{
+        *esp = *esp - 4
+        (*(uintptr_t  **)(*esp)) = (*esp+4);
+        *esp = *esp - 4;
+        *(int *)(*esp) = argc;
+        *esp = *esp - 4;
+        (*(int *)(*esp))=0;
+
+      }else
         palloc_free_page (kpage);
-      }
     }
-      return success;
+  return success;
 }
 
 /* Adds a mapping from user virtual address UPAGE to kernel

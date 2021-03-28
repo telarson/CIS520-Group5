@@ -1,6 +1,7 @@
 {
     "C_Cpp.dimInactiveRegions": false,
     "files.associations": {
-        "thread.h": "c"
+        "thread.h": "c",
+        "filesys.h": "c"
     }
 }
