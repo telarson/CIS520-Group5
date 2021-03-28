@@ -479,7 +479,7 @@ validate_ptr (const void *vaddr)
     if (vaddr < 0x08048000 || !is_user_vaddr(vaddr))
     {
       // virtual memory address is not reserved for us (out of bound)
-      syscall_exit(-1);
+      exit(-1);
     }
 }
 
