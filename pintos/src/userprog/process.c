@@ -509,10 +509,10 @@ setup_stack (void **esp, int argc, char *argv[])
     {
       success = install_page (((uint8_t *) PHYS_BASE) - PGSIZE, kpage, true);
       if (success) {
-        *esp = PHYS_BASE;
+        *esp = PHYS_BASE-24;
         int i = argc;
-        uint32_t * arr[argc];
-        for(i = argc; i >= 0; i--)
+	uint32_t * arr[argc];
+	for(i = argc-1; i >= 0; i--)
         {
           *esp = *esp - (strlen(argv[i])+1)*sizeof(char);
           arr[i] = (uint32_t *)*esp;
@@ -521,7 +521,7 @@ setup_stack (void **esp, int argc, char *argv[])
         *esp = *esp - 4;
         (*(int *)(*esp)) = 0;
         i = argc;
-        for(i = argc; i >= 0; i--)
+        for(i = argc-1; i >= 0; i--)
         {
           *esp = *esp - 4;//32bits each allocated
           (*(uint32_t **)(*esp)) = arr[i];
