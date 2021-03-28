@@ -20,6 +20,8 @@ static int read_usr_stack (void *init_addr, void *result, size_t num_of_bytes);
 static int get_user (const uint8_t *uaddr);
 static bool put_user (uint8_t *udst, uint8_t byte);
 struct file* get_file(int fd);
+void validate_ptr (const void* vaddr);
+void validate_buffer (const void* buf, unsigned byte_size);
 
 
 /*Lock to ensure filesystem can only be accessed by one process at a time */
@@ -153,6 +155,8 @@ syscall_handler (struct intr_frame *f)
       read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
       read_usr_stack(stack_pointer + 8, &buff, sizeof(buff));
       read_usr_stack(stack_pointer + 12, &size, sizeof(size));
+
+      validate_buffer(buff, size);
 
       printf ("calling write function!\n");
       f->eax = write(fd, buff, size);
@@ -468,3 +472,27 @@ struct file* get_file(int fd) {
 	}
 	return NULL;
 }
+
+void
+validate_ptr (const void *vaddr)
+{
+    if (vaddr < 0x08048000 || !is_user_vaddr(vaddr))
+    {
+      // virtual memory address is not reserved for us (out of bound)
+      syscall_exit(-1);
+    }
+}
+
+void
+validate_buffer(const void* buf, unsigned byte_size)
+{
+  unsigned i = 0;
+  char* local_buffer = (char *)buf;
+  for (; i < byte_size; i++)
+  {
+    validate_ptr((const void*)local_buffer);
+    local_buffer++;
+  }
+}
+
+
