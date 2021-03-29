@@ -35,6 +35,7 @@ struct file_entry {
   struct list_elem fe;
 };
 
+/*initializes syscall handler with intr_register_int and lock_filesys */
 void
 syscall_init (void)
 {
@@ -177,6 +178,7 @@ syscall_handler (struct intr_frame *f)
   }
 }
 
+/* Reads from the user stack at init_addr into result a size num_of_bytes*/
 static int
 read_usr_stack (void *init_addr, void *result, size_t num_of_bytes)
 {
@@ -467,6 +469,7 @@ struct file* get_file(int fd) {
 	return NULL;
 }
 
+/* Checks that a given pointer is valid for user programs to use*/
 void
 validate_ptr (const void *vaddr)
 {
@@ -477,6 +480,7 @@ validate_ptr (const void *vaddr)
     }
 }
 
+/* Checks that a pointer to a buffer BUF is valid for the size BYTE_SIZE*/
 void
 validate_buffer(const void* buf, unsigned byte_size)
 {
