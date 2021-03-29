@@ -298,6 +298,7 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
+  sema_up(&thread_current()->being_waited);
   process_exit ();
 #endif
 
@@ -536,6 +537,7 @@ init_thread (struct thread *t, const char *name, int priority)
   #endif
   list_init(&t->donors_list);
   sema_init(&t->sema,0);
+  sema_init(&t->being_waited, 0);
 
   old_level = intr_disable ();
   

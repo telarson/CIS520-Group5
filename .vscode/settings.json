@@ -2,6 +2,7 @@
     "C_Cpp.dimInactiveRegions": false,
     "files.associations": {
         "thread.h": "c",
-        "filesys.h": "c"
+        "filesys.h": "c",
+        "*.inc": "c"
     }
 }
