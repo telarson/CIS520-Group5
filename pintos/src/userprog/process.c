@@ -22,7 +22,6 @@ static thread_func start_process NO_RETURN;
 static bool load (const char *cmdline, void (**eip) (void), void **esp);
 
 static void get_tid (struct thread *t, void *aux);
-static void get_args (char * fn, char* argv[], int *argc);
 
 static struct thread *match_thread;
 static tid_t current_tid;
@@ -567,18 +566,5 @@ get_tid(struct thread *t, void *aux UNUSED){
   if(current_tid == t->tid)
   {
     match_thread = t;
-  }
-}
-
-/* check cmd and return seperate args from input */
-static void
-get_args(char* fn, char* argv[], int *argc){
-  char *saveptr;
-  argv[0] = strtok_r(fn, " ", &saveptr);
-  char *token;
-  *argc = 1;
-  //populate argv with token arguments
-  while((token = strtok_r(NULL, " ", &saveptr))!=NULL){
-    argv[(*argc)++] = token;
   }
 }
