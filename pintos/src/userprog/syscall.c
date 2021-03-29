@@ -22,6 +22,7 @@ static bool put_user (uint8_t *udst, uint8_t byte);
 struct file* get_file(int fd);
 void validate_ptr (const void* vaddr);
 void validate_buffer (const void* buf, unsigned byte_size);
+void validate_usr_addr (const uint8_t *usr_addr);
 
 
 /*Lock to ensure filesystem can only be accessed by one process at a time */
@@ -50,21 +51,17 @@ syscall_handler (struct intr_frame *f)
   void *stack_pointer = f->esp;
   int syscall_num;
 
-  printf ("system call!\n");
   read_usr_stack (stack_pointer, &syscall_num, 4);
-  printf ("Entering switch!\n");
   
   switch (syscall_num)
   {
     case SYS_HALT:
     {
-      printf ("halt!\n");
       halt ();
       break;
     }
     case SYS_EXIT:
     {
-      printf ("exit!\n");
       int exit_code;
       read_usr_stack (stack_pointer + 4, &exit_code, sizeof(exit_code));
       exit (exit_code);
@@ -73,7 +70,6 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_EXEC:
     {
-      printf ("exec!\n");
       void* cmd_line;
       read_usr_stack (stack_pointer + 4, &cmd_line, sizeof(cmd_line));
       int id = exec ((const char*) cmd_line);
@@ -82,7 +78,6 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_WAIT:
     {
-      printf ("wait!\n");
       pid_t wait_pid;
       read_usr_stack(stack_pointer + 4, &wait_pid, sizeof(wait_pid));
 
@@ -92,7 +87,6 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_CREATE:
     {
-      printf ("create!\n");
       const char *file;
       unsigned initial_size;
       bool result;
@@ -104,7 +98,6 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_REMOVE:
     {
-      printf ("remove!\n");
       const char *file;
       bool result;
       read_usr_stack (stack_pointer + 4, &file, sizeof(file));
@@ -114,7 +107,6 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_OPEN:
     {
-      printf ("open!\n");
       const char *file;
       int result;
       read_usr_stack (stack_pointer + 4, &file, sizeof(file));
@@ -124,7 +116,6 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_FILESIZE:
     {
-      printf ("filesize!\n");
       int fd;
     	read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
       f->eax = filesize(fd);
@@ -132,7 +123,6 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_READ:
     {
-      printf ("read!\n");
       int fd;
       void * buff;
       unsigned int size;
@@ -146,26 +136,22 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_WRITE:
     {
-      printf ("write!\n");
       int fd;
       const void * buff;
       unsigned size;
 
-      printf ("reading user stack...\n");
+      //printf ("reading user stack...\n");
       read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
       read_usr_stack(stack_pointer + 8, &buff, sizeof(buff));
       read_usr_stack(stack_pointer + 12, &size, sizeof(size));
 
       validate_buffer(buff, size);
 
-      printf ("calling write function!\n");
       f->eax = write(fd, buff, size);
-      printf("success!\n");
       break;
     }
     case SYS_SEEK:
     {
-      printf ("seek!\n");
       int fd;
     	read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
     	int position;
@@ -175,7 +161,6 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_TELL:
     {
-      printf ("tell!\n");
       int fd;
     	read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
       f->eax = tell (fd);
@@ -183,7 +168,6 @@ syscall_handler (struct intr_frame *f)
     }
     case SYS_CLOSE:
     {
-      printf ("close!\n");
       int fd;
     	read_usr_stack(stack_pointer + 4, &fd, sizeof(fd));
       close (fd);
@@ -244,6 +228,7 @@ void exit (int status)
 pid_t
 exec (const char *cmd_line)
 {
+  validate_usr_addr ((const uint8_t*) cmd_line);
   lock_acquire (&lock_filesys);
   pid_t id = process_execute (cmd_line);
   lock_release (&lock_filesys);
@@ -419,33 +404,25 @@ void close (int fd)
 /* Writes SIZE bytes from BUFFER to the open file FD. Returns the number of bytes that were written*/
 int write (int fd, const void *buffer, unsigned size)
 {
-  printf("Acquiring lock!\n");
   lock_acquire(&lock_filesys);
 
   //fd == 0, no files present or STDIN
-  printf("evaluating if\n");
   if (fd == 0)
   {
-    printf("inside if!\n");
     lock_release(&lock_filesys);
     return 0;
   }
   
-    printf("evaluating another if!\n");
 
   //fd == 1, write to STDOUT
   if(fd == 1)
   {
-    printf("inside another if!\n");
     putbuf(buffer, size);
-    printf("releasing lock!\n");
     lock_release(&lock_filesys);
 
-    printf("returning!\n");
     return size;
   }
   
-  printf("Writing to file!\n");
   struct file *file_ptr = get_file(fd);
   if(!file_ptr)
   {
@@ -454,7 +431,6 @@ int write (int fd, const void *buffer, unsigned size)
   }  
   int bytes_written = (int)file_write(file_ptr, buffer, size);
 
-  printf("releasing lock\n");
   lock_release(&lock_filesys);
 
   return bytes_written;
@@ -492,6 +468,17 @@ validate_buffer(const void* buf, unsigned byte_size)
   {
     validate_ptr((const void*)local_buffer);
     local_buffer++;
+  }
+}
+
+void validate_usr_addr (const uint8_t *usr_addr) {
+  if (get_user (usr_addr) == -1) {
+    if (lock_held_by_current_thread(&lock_filesys)) {
+      lock_release (&lock_filesys);
+    }
+
+    exit (-1);
+    NOT_REACHED();
   }
 }
 
