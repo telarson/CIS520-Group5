@@ -184,6 +184,15 @@ read_usr_stack (void *init_addr, void *result, size_t num_of_bytes)
   for (i = 0; i < num_of_bytes; i++)
   {
     value = get_user (init_addr + i);
+    if (value == -1)
+    {
+      if (lock_held_by_current_thread(&lock_filesys)) {
+        lock_release (&lock_filesys);
+      }
+
+      exit (-1);
+      NOT_REACHED();
+    }
     *(char*)(result + i) = value & 0xff;
   }
   return (int)num_of_bytes;
@@ -195,6 +204,12 @@ read_usr_stack (void *init_addr, void *result, size_t num_of_bytes)
    occurred. */
 static int
 get_user (const uint8_t *uaddr){
+  //make sure the address is in the users memory
+  if (! ((void*)uaddr < PHYS_BASE))
+  {
+    return -1;
+  }
+
   int result;
   asm ("movl $1f, %0; movzbl %1, %0; 1:"
    : "=&a" (result) : "m" (*uaddr));
