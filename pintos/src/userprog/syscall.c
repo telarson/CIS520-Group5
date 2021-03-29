@@ -22,7 +22,7 @@ static bool put_user (uint8_t *udst, uint8_t byte);
 struct file* get_file(int fd);
 void validate_ptr (const void* vaddr);
 void validate_buffer (const void* buf, unsigned byte_size);
-void validate_usr_addr (const uint8_t *usr_addr);
+static void validate_usr_addr (const uint8_t *usr_addr);
 
 
 /*Lock to ensure filesystem can only be accessed by one process at a time */
@@ -262,6 +262,7 @@ bool
 create (const char *file, unsigned initial_size)
 {
   bool result;
+  validate_usr_addr((const uint8_t*) file);
   lock_acquire (&lock_filesys);
   result = filesys_create (file, initial_size);
   lock_release (&lock_filesys);
@@ -493,7 +494,7 @@ validate_buffer(const void* buf, unsigned byte_size)
   }
 }
 
-void validate_usr_addr (const uint8_t *usr_addr) {
+static void validate_usr_addr (const uint8_t *usr_addr) {
   if (get_user (usr_addr) == -1) {
     if (lock_held_by_current_thread(&lock_filesys)) {
       lock_release (&lock_filesys);
