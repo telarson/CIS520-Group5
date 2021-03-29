@@ -124,12 +124,13 @@ syscall_handler (struct intr_frame *f)
     case SYS_READ:
     {
       int fd;
-      void * buff;
+      int buff;
       unsigned int size;
 
       read_usr_stack(stack_pointer +4, &fd, sizeof(fd));
       read_usr_stack(stack_pointer +8, &buff, sizeof(buff));
       read_usr_stack(stack_pointer + 12, &size, sizeof(size));
+      validate_buffer(buff, size);
 
       f->eax = read(fd, buff, size);
       break;
@@ -137,7 +138,7 @@ syscall_handler (struct intr_frame *f)
     case SYS_WRITE:
     {
       int fd;
-      const void * buff;
+      int buff;
       unsigned size;
 
       //printf ("reading user stack...\n");
