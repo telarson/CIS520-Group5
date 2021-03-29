@@ -115,6 +115,7 @@ struct thread
     uint32_t *pagedir;                  /* Page directory. */
     struct list child_list;             /* list of children */
     struct list_elem child_elem;        /* list element for children */
+    struct semaphore being_waited;    /*used to sleep a parent thread waiting for this chile*/
     int exit_code;                      /* status on return from interupt */
     
 
