@@ -391,6 +391,7 @@ void close (int fd)
   lock_acquire(&lock_filesys);
 
   if(list_empty(&thread_current()->fd_list)){
+        lock_release(&lock_filesys);
   	return;
   }
 
@@ -399,6 +400,7 @@ void close (int fd)
   
   file_close(f); // from filesys/file.h
   list_remove(&file_entry->fe);
+  lock_release(&lock_filesys);
 }
 
 /* Writes SIZE bytes from BUFFER to the open file FD. Returns the number of bytes that were written*/
