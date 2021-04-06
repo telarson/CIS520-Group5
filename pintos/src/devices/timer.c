@@ -17,9 +17,6 @@
 #error TIMER_FREQ <= 1000 recommended
 #endif
 
-/* list to track threads that are asleep. */
-static struct list threads_asleep;
-
 /* Number of timer ticks since OS booted. */
 static int64_t ticks;
 
@@ -33,9 +30,6 @@ static void busy_wait (int64_t loops);
 static void real_time_sleep (int64_t num, int32_t denom);
 static void real_time_delay (int64_t num, int32_t denom);
 
-/* Compares thread wakeup ticks used in sorted list*/
-static bool thread_sleep_less (const struct list_elem *left, const struct list_elem *right, void *aux UNUSED);
-
 /* Sets up the timer to interrupt TIMER_FREQ times per second,
    and registers the corresponding interrupt. */
 void
@@ -43,8 +37,6 @@ timer_init (void)
 {
   pit_configure_channel (0, 2, TIMER_FREQ);
   intr_register_ext (0x20, timer_interrupt, "8254 Timer");
-  
-  list_init(&threads_asleep);
 }
 
 /* Calibrates loops_per_tick, used to implement brief delays. */
@@ -99,25 +91,9 @@ timer_sleep (int64_t ticks)
 {
   int64_t start = timer_ticks ();
 
-/* gets current thread and sets the wakeup tick for the thread */
-  struct thread* t = thread_current();
-  t->thread_wakeup_tick = start + ticks; 
-
-  /* Initialize timer sema of thread */
-  sema_init(&(t->sema), 0);
-
-  ASSERT(intr_get_level () == INTR_ON);
-  enum intr_level old_level = intr_disable();
-  /* Inserts new thread into threads_asleep list and sorts by sleep time, 
-     list_insert_ordered used from src/lib/kernel/list.h in pintos */
-  list_insert_ordered(&threads_asleep, &t->elem_timer, thread_sleep_less, NULL); 
-
-  intr_set_level(old_level);
-  ASSERT(intr_get_level () == INTR_ON);
-
-  /* Calls sema_down with the semaphore associated with thread
-     telling thread to wait til it wakes up */
-  sema_down(&(t->sema));
+  ASSERT (intr_get_level () == INTR_ON);
+  while (timer_elapsed (start) < ticks) 
+    thread_yield ();
 }
 
 /* Sleeps for approximately MS milliseconds.  Interrupts must be
@@ -190,26 +166,12 @@ timer_print_stats (void)
   printf ("Timer: %"PRId64" ticks\n", timer_ticks ());
 }
 
-/* Timer interrupt handler. Check if thread needs to wake up, only checks
-   head of list because list is ordered by sleep time shortest -> longest
-   if thread is ready to wake up, wake it up and pop it off the list. */
+/* Timer interrupt handler. */
 static void
 timer_interrupt (struct intr_frame *args UNUSED)
 {
   ticks++;
   thread_tick ();
-  /* Check if a thread needs to wake up*/
-  struct thread* t;
-  while(!list_empty(&threads_asleep)){ 
-    t = list_entry(list_front(&threads_asleep), struct thread, elem_timer); 
-    if(ticks >= t->thread_wakeup_tick){ 
-      list_pop_front(&threads_asleep);
-      sema_up(&t->sema);
-    }
-    else{
-      break;
-    }
-  }
 }
 
 /* Returns true if LOOPS iterations waits for more than one timer
@@ -281,12 +243,4 @@ real_time_delay (int64_t num, int32_t denom)
      the possibility of overflow. */
   ASSERT (denom % 1000 == 0);
   busy_wait (loops_per_tick * num / 1000 * TIMER_FREQ / (denom / 1000)); 
-}
-
-/* Function to match typedef of list_less_func in list_insert_ordered.
-   Checks if thread a has a longer sleep time than thread b, then returns
-   true if a is shorter than b */
-bool
-thread_sleep_less(const struct list_elem *left, const struct list_elem *right, void *aux UNUSED) {
-  return list_entry(left,struct thread,elem_timer)->thread_wakeup_tick < list_entry(right,struct thread,elem_timer)->thread_wakeup_tick;
 }

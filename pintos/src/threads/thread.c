@@ -13,9 +13,8 @@
 #include "threads/vaddr.h"
 #ifdef USERPROG
 #include "userprog/process.h"
+#include "userprog/syscall.h"
 #endif
-
-static const int DEPTH = 8;   //Max donation depth
 
 /* Random value for struct thread's `magic' member.
    Used to detect stack overflow.  See the big comment at the top
@@ -25,7 +24,6 @@ static const int DEPTH = 8;   //Max donation depth
 /* List of processes in THREAD_READY state, that is, processes
    that are ready to run but not actually running. */
 static struct list ready_list;
-
 
 /* List of all processes.  Processes are added to this list
    when they are first scheduled and removed when they exit. */
@@ -120,7 +118,6 @@ thread_start (void)
   sema_down (&idle_started);
 }
 
-
 /* Called by the timer interrupt handler at each timer tick.
    Thus, this function runs in an external interrupt context. */
 void
@@ -141,7 +138,6 @@ thread_tick (void)
   /* Enforce preemption. */
   if (++thread_ticks >= TIME_SLICE)
     intr_yield_on_return ();
-  
 }
 
 /* Prints thread statistics. */
@@ -178,7 +174,6 @@ thread_create (const char *name, int priority,
   tid_t tid;
   enum intr_level old_level;
 
-
   ASSERT (function != NULL);
 
   /* Allocate thread. */
@@ -190,6 +185,9 @@ thread_create (const char *name, int priority,
   init_thread (t, name, priority);
   tid = t->tid = allocate_tid ();
 
+  /* Prepare thread for first run by initializing its stack.
+     Do this atomically so intermediate values for the 'stack' 
+     member cannot be observed. */
   old_level = intr_disable ();
 
   /* Stack frame for kernel_thread(). */
@@ -211,7 +209,7 @@ thread_create (const char *name, int priority,
 
   /* Add to run queue. */
   thread_unblock (t);
-  check_priority();
+
   return tid;
 }
 
@@ -248,12 +246,8 @@ thread_unblock (struct thread *t)
 
   old_level = intr_disable ();
   ASSERT (t->status == THREAD_BLOCKED);
-  list_insert_ordered (&ready_list, &t->elem, (list_less_func *)&greater_thread_priority, NULL);
+  list_push_back (&ready_list, &t->elem);
   t->status = THREAD_READY;
-
-  //if (thread_current () != idle_thread && thread_current ()->priority < t-> priority)
-  //  thread_yield ();
-
   intr_set_level (old_level);
 }
 
@@ -298,10 +292,10 @@ thread_exit (void)
   ASSERT (!intr_context ());
 
 #ifdef USERPROG
-  sema_up(&thread_current()->being_waited);
   process_exit ();
 #endif
-
+  syscall_exit ();
+  
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
@@ -323,10 +317,8 @@ thread_yield (void)
   ASSERT (!intr_context ());
 
   old_level = intr_disable ();
-
   if (cur != idle_thread) 
-    list_insert_ordered (&ready_list, &cur->elem, (list_less_func *) &greater_thread_priority, NULL);
-
+    list_push_back (&ready_list, &cur->elem);
   cur->status = THREAD_READY;
   schedule ();
   intr_set_level (old_level);
@@ -353,57 +345,13 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  /*
-  enum intr_level old_level;
-  old_level = intr_disable();
-
-  struct thread* t = thread_current();
-  Set threads priorities to new_priority
-  t->priority = new_priority;
-  t->starting_priority = new_priority;
-
-  get priority and use it to compare to new_priority and either donate or yield
-  int max_priority = thread_get_priority();
-  if(t->priority < max_priority){
-      //donate
-      
-
-  }
-  else {
-      //yield
-      
-  }
-
-  intr_set_level (old_level);
-  */
-
- int old_priority = thread_current()->priority;
-  thread_current()->priority = new_priority;
-  thread_current()->starting_priority = new_priority;
-
-  if (old_priority > new_priority) 
-  {
-    donation_release();
-    check_priority();
-  }
-
+  thread_current ()->priority = new_priority;
 }
 
 /* Returns the current thread's priority. */
 int
 thread_get_priority (void) 
 {
-  /* Returns greatest priority in current thread*/
-  /*if(!list_empty(&thread_current()->donors_list)) {
-    struct thread* t = thread_current();
-    int max_priority = list_entry(list_front(&t->donors_list), struct thread, donors_elem)->priority;
-    if(t->priority <= max_priority) {
-      return max_priority;
-    }
-    else {
-      return t->priority;
-    }
-  }*/
   return thread_current ()->priority;
 }
 
@@ -513,8 +461,6 @@ is_thread (struct thread *t)
 static void
 init_thread (struct thread *t, const char *name, int priority)
 {
-  enum intr_level old_level;
-
   ASSERT (t != NULL);
   ASSERT (PRI_MIN <= priority && priority <= PRI_MAX);
   ASSERT (name != NULL);
@@ -524,24 +470,12 @@ init_thread (struct thread *t, const char *name, int priority)
   strlcpy (t->name, name, sizeof t->name);
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
+  list_init (&t->children);
+  t->wait_status = NULL;
+  list_init (&t->fds);
+  t->next_handle = 2;
   t->magic = THREAD_MAGIC;
   list_push_back (&all_list, &t->allelem);
-
-  t->starting_priority = priority;
-  t->waiting_lock = NULL;
-  list_init(&t->fd_list);
-  t->fd = 2;
-  #ifdef USERPROG
-  list_init(&t->child_list);
-  t->exit_code = -1;
-  #endif
-  list_init(&t->donors_list);
-  sema_init(&t->sema,0);
-  sema_init(&t->being_waited, 0);
-
-  old_level = intr_disable ();
-  
-  intr_set_level (old_level);
 }
 
 /* Allocates a SIZE-byte frame at the top of thread T's stack and
@@ -652,86 +586,6 @@ allocate_tid (void)
   lock_release (&tid_lock);
 
   return tid;
-}
-
-/* Returns result of thread a priority > thread b priority list elements */
-bool greater_thread_priority
-  (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
-{
-  struct thread *thread_a, *thread_b;
-  thread_a = list_entry (a, struct thread, elem);
-  thread_b = list_entry (b, struct thread, elem);
-  return thread_a->priority > thread_b->priority;
-}
-
-/* Returns result of thread a donors priority > thread b donors priority list elements */
-bool greater_donate_priority
-  (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
-{
-  struct thread *thread_a, *thread_b;
-  thread_a = list_entry (a, struct thread, donors_elem);
-  thread_b = list_entry (b, struct thread, donors_elem);
-  return thread_a->priority > thread_b->priority;
-}
-
-void
-donation_get()
-{
-  int depth = DEPTH;
-  struct thread* current = thread_current();
-
-  while(current->waiting_lock != NULL && depth > 0)
-  {
-      depth -= 1;
-      struct thread* prior = current->waiting_lock->holder;
-
-      if(prior != NULL && prior->priority < current->priority)
-      {
-        prior->priority = current->priority;
-        current = prior;
-      }
-      else
-        return;
-  }
-}
-
-void
-donation_release()
-{
-  struct thread* current = thread_current();
-  current->priority = current->starting_priority;
-
-  if(!list_empty(&current->donors_list))
-  {
-    struct thread* next = list_entry(list_begin(&current->donors_list), 
-    struct thread, donors_elem);
-
-    if(next->priority > current->priority)
-    {
-      current->priority = next->priority;
-    }
-  }
-}
-
-void check_priority()
-{
-  if (!list_empty(&ready_list)) {
-    struct thread * next_thread = 
-      list_entry(list_begin(&ready_list), struct thread, elem);
-
-
-    if (thread_current()->priority < next_thread->priority) {
-      if(intr_context())
-      {
-        intr_yield_on_return();
-      }
-      else
-      {
-        thread_yield();
-      }
-    }
-      
-  }
 }
 
 /* Offset of `stack' member within `struct thread'.
