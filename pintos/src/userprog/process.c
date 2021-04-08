@@ -18,6 +18,12 @@
 #include "threads/palloc.h"
 #include "threads/thread.h"
 #include "threads/vaddr.h"
+#include "vm/frame.h"
+
+#ifndef VM
+#define allocate_frame(x) palloc_get_page(x)
+#define free_frame(x) palloc_free_page(x)
+#endif
 
 static thread_func start_process NO_RETURN;
 static bool load (const char *cmd_line, void (**eip) (void), void **esp);
