@@ -1,76 +1,162 @@
-#include <stdio.h>
-#include "lib/kernel/hash.h"
-
 #include "vm/frame.h"
+#include <stdio.h>
+#include "vm/page.h"
+#include "devices/timer.h"
+#include "threads/init.h"
 #include "threads/malloc.h"
 #include "threads/palloc.h"
+#include "threads/synch.h"
+#include "threads/vaddr.h"
 
-static struct hash frame_hash;
-static unsigned frame_hash_func (const struct hash_elem *elem, void *aux);
-static bool frame_less_func (const struct hash_elem *, const struct hash_elem *, void *aux);
+static struct frame *frames;
+static size_t frame_cnt;
 
-struct frame_entry
-{
-	void *user_page;						/* pointer to page address in user memory*/
-	void *kernel_page;					/* pointer to page address in physical memory*/
-	struct hash_elem hash_elem; /* frame_entry in frame_to_page */
-};
+static struct lock scan_lock;
+static size_t hand;
+
+/* Initialize the frame manager. */
 void
-init_frame ()
+frame_init (void) 
 {
-	hash_init (&frame_hash, frame_hash_func, frame_less_func, NULL);
-}
-/**
- * Allocates a new frame
- * and returns the address of the page allocated.
- */
-void*
-allocate_frame (void *user_page)
-{
-	void *page = palloc_get_page (PAL_USER);
-	if (page == NULL) {
-    PANIC ("Failed to find available frame for allocation in user memeory");
-	}
+  void *base;
 
-	struct frame_entry *frame = malloc (sizeof (struct frame_entry));
-	if (frame == NULL){
-		PANIC ("Failed to alloc memory for frame entry sturct");
-	}
+  lock_init (&scan_lock);
+  
+  frames = malloc (sizeof *frames * init_ram_pages);
+  if (frames == NULL)
+    PANIC ("out of memory allocating page frames");
 
-	frame->user_page = user_page;
-	frame->kernel_page = page;
-	hash_insert (&frame_hash, &frame->hash_elem);
-	return page;
+  while ((base = palloc_get_page (PAL_USER)) != NULL) 
+    {
+      struct frame *f = &frames[frame_cnt++];
+      lock_init (&f->lock);
+      f->base = base;
+      f->page = NULL;
+    }
 }
 
+/* Tries to allocate and lock a frame for PAGE.
+   Returns the frame if successful, false on failure. */
+static struct frame *
+try_frame_alloc_and_lock (struct page *page) 
+{
+  size_t i;
+
+  lock_acquire (&scan_lock);
+
+  /* Find a free frame. */
+  for (i = 0; i < frame_cnt; i++)
+    {
+      struct frame *f = &frames[i];
+      if (!lock_try_acquire (&f->lock))
+        continue;
+      if (f->page == NULL) 
+        {
+          f->page = page;
+          lock_release (&scan_lock);
+          return f;
+        } 
+      lock_release (&f->lock);
+    }
+
+  /* No free frame.  Find a frame to evict. */
+  for (i = 0; i < frame_cnt * 2; i++) 
+    {
+      /* Get a frame. */
+      struct frame *f = &frames[hand];
+      if (++hand >= frame_cnt)
+        hand = 0;
+
+      if (!lock_try_acquire (&f->lock))
+        continue;
+
+      if (f->page == NULL) 
+        {
+          f->page = page;
+          lock_release (&scan_lock);
+          return f;
+        } 
+
+      if (page_accessed_recently (f->page)) 
+        {
+          lock_release (&f->lock);
+          continue;
+        }
+          
+      lock_release (&scan_lock);
+      
+      /* Evict this frame. */
+      if (!page_out (f->page))
+        {
+          lock_release (&f->lock);
+          return NULL;
+        }
+
+      f->page = page;
+      return f;
+    }
+
+  lock_release (&scan_lock);
+  return NULL;
+}
+
+
+/* Tries really hard to allocate and lock a frame for PAGE.
+   Returns the frame if successful, false on failure. */
+struct frame *
+frame_alloc_and_lock (struct page *page) 
+{
+  size_t try;
+
+  for (try = 0; try < 3; try++) 
+    {
+      struct frame *f = try_frame_alloc_and_lock (page);
+      if (f != NULL) 
+        {
+          ASSERT (lock_held_by_current_thread (&f->lock));
+          return f; 
+        }
+      timer_msleep (1000);
+    }
+
+  return NULL;
+}
+
+/* Locks P's frame into memory, if it has one.
+   Upon return, p->frame will not change until P is unlocked. */
 void
-free_frame (void *kernel_page)
+frame_lock (struct page *p) 
 {
-	struct frame_entry temp;
-	temp.kernal_page = kernal_page;
-	struct hash_elem *elem = hash_find (&frame_hash, &(temp.hash_elem));
-	if (elem == NULL) {
-		PANIC ("Could not find element you are trying to free from table");
-	}
-
-	struct frame_entry *entry;
-	entry = hash_entry (elem, struct frame_entry, hash_elem);
-	hash_delete (&frame_hash, &entry->hash_elem);
-	palloc_free_page(kernal_page);
-	free(entry);
+  /* A frame can be asynchronously removed, but never inserted. */
+  struct frame *f = p->frame;
+  if (f != NULL) 
+    {
+      lock_acquire (&f->lock);
+      if (f != p->frame)
+        {
+          lock_release (&f->lock);
+          ASSERT (p->frame == NULL); 
+        } 
+    }
 }
 
-static unsigned
-frame_hash_func (const struct hash_elem *elem, void *aux)
+/* Releases frame F for use by another page.
+   F must be locked for use by the current process.
+   Any data in F is lost. */
+void
+frame_free (struct frame *f)
 {
-	struct frame_entry *entry = hash_entry (elem, struct frame_entry, hash_elem);
-  return hash_bytes (&entry->kernel_page, sizeof entry->kernal_page);
+  ASSERT (lock_held_by_current_thread (&f->lock));
+          
+  f->page = NULL;
+  lock_release (&f->lock);
 }
 
-static bool
-frame_less_func (const struct hash_elem *elem1, const struct hash_elem *elem2, void *aux UNUSED)
+/* Unlocks frame F, allowing it to be evicted.
+   F must be locked for use by the current process. */
+void
+frame_unlock (struct frame *f) 
 {
-  struct frame_entry *entry1 = hash_entry (elem1, struct frame_entry, hash_elem);
-  struct frame_entry *entry2 = hash_entry (elem2, struct frame_entry, hash_elem);
-  return entry1->kernel_page < entry2->kernel_page;
+  ASSERT (lock_held_by_current_thread (&f->lock));
+  lock_release (&f->lock);
 }
