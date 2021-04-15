@@ -520,7 +520,7 @@ unmap (struct mapping *m)
   }
 
   /*Deallocate each memory mapped page to reclaim process memory*/
-  for(i = 0; i <= m->page_cnt; i++)
+  for(i = 0; i < m->page_cnt; i++)
   {
     page_deallocate((void *) ((m->base) + (PGSIZE * i)));
   }
