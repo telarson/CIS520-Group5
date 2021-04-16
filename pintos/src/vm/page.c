@@ -147,16 +147,30 @@ page_out (struct page *p)
      dirty bit, to prevent a race with the process dirtying the
      page. */
 
-/* add code here */
-
+  pagedir_clear_page(p->thread->pagedir, p->addr);
   /* Has the frame been modified? */
-
-/* add code here */
-
-  /* Write frame contents to disk if necessary. */
-
-/* add code here */
-
+  dirty = pagedir_is_dirty(p->thread->pagedir, p->addr);
+  //if file is NULL swap it out to dodge any page faults
+  if(p->file == NULL){
+    ok = swap_out(p);
+  } 
+  else if(!dirty){
+    //if file is not dirty then we can return true and finish frame
+    p->frame = NULL;
+    return true;
+  }
+  else if(dirty){
+    //if file is dirty and private swap, else just dirty and not private write file
+    if(p->private){
+      ok = swap_out(p);
+    }else {
+      ok = file_write_at(p->file, p->frame->base, p->file_bytes, p->file_offset);
+    }
+  }
+  //swapped everything and finished with frame
+  if(ok) {
+    p->frame = NULL;
+  }
   return ok;
 }
 
