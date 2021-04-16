@@ -39,22 +39,24 @@ page_exit (void)
 static struct page *
 page_for_addr (const void *address) 
 {
-  if (address < PHYS_BASE) 
-    {
-      struct page p;
-      struct hash_elem *e;
+  if (address < PHYS_BASE) {
+    struct page p;
+    struct hash_elem *e;
 
-      /* Find existing page. */
-      p.addr = (void *) pg_round_down (address);
-      e = hash_find (thread_current ()->pages, &p.hash_elem);
-      if (e != NULL)
-        return hash_entry (e, struct page, hash_elem);
+    /* Find existing page. */
+    p.addr = (void *) pg_round_down (address);
+    e = hash_find (thread_current ()->pages, &p.hash_elem);
+    if (e != NULL)
+      return hash_entry (e, struct page, hash_elem);
 
-      /* No page.  Expand stack? */
-
-/* add code */
-
+    /* Expand stack if address appears to be a valid stack address request 
+       (within the size of a PUSHA command, 32 bytes, plus the stack pointer address
+       and within the absolute bound of the stack) */
+    if ((thread_current ()->user_esp < address + 32) && (p.addr > PHYS_BASE - STACK_MAX)) {
+      return page_allocate(p.addr, false);
     }
+  }
+  
   return NULL;
 }
 
